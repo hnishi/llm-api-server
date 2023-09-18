@@ -1,0 +1,250 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "API Gateway EC2 Template"
+
+Parameters:
+  SsmParameterValueawsserviceamiamazonlinuxlatestamzn2:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs"
+  CidrPrefix:
+    Type: String
+    Description: "(Example: 10.35)"
+    Default: 10.35
+  InstanceType:
+    Type: String
+    Default: t3a.medium
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Sub '${CidrPrefix}.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+  VPCPublicSubnetSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Sub '${CidrPrefix}.0.0/24'
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name`
+          Value: !Sub '${AWS::StackName}-public-subnet1'
+  VPCPublicSubnetSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet1-routetable'
+  VPCPublicSubnetSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPCPublicSubnetSubnet1RouteTable
+      SubnetId: !Ref VPCPublicSubnetSubnet1
+  VPCPublicSubnetSubnet1DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref VPCPublicSubnetSubnet1RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPCIGW
+    DependsOn:
+      - VPCGW
+  VPCPublicSubnetSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Sub '${CidrPrefix}.1.0/24'
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name`
+          Value: !Sub '${AWS::StackName}-public-subnet2'
+  VPCPublicSubnetSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet2-routetable'
+  VPCPublicSubnetSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicSubnetSubnet2RouteTable
+      SubnetId: !Ref VPCPublicSubnetSubnet2
+  VPCPublicSubnetSubnet2DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref VPCPublicSubnetSubnet2RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPCIGW
+    DependsOn:
+      - VPCGW
+  VPCIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+    Metadata:
+      aws:cdk:path: ApiEc22Stack/VPC/IGW
+  VPCGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref VPCIGW
+  Ec2Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${AWS::StackName}-ec2-sg'
+      GroupName: !Sub '${AWS::StackName}-ec2-sg'
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: !Sub '${CidrPrefix}.0.0/16'
+          Description: Allow VPC inbound traffic
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+      VpcId: !Ref VPC
+  IamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      RoleName: !Sub '${AWS::StackName}-ec2-role'
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref IamRole
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      ImageId: !Ref SsmParameterValueawsserviceamiamazonlinuxlatestamzn2
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds:
+        - !GetAtt Ec2Sg.GroupId
+      SubnetId: !Ref VPCPublicSubnetSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ec2'
+      UserData:
+        Fn::Base64: |
+          #!/bin/sh -ex
+
+          yum update -y
+          yum install git docker -y
+          service docker start
+          systemctl enable docker.service
+          usermod -a -G docker ec2-user
+          sudo -u ec2-user docker run -d -p 8080:80 httpd
+    DependsOn:
+      - IamRole
+  NetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+      Name: !Sub '${AWS::StackName}-nlb'
+      Scheme: internal
+      Subnets:
+        - !Ref VPCPublicSubnetSubnet1
+        - !Ref VPCPublicSubnetSubnet2
+      Type: network
+  NetworkListner:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            Ref: NetworkListnerTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref NetworkLoadBalancer
+      Port: 80
+      Protocol: TCP
+  NetworkListnerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-tg'
+      Port: 8080
+      Protocol: TCP
+      Targets:
+        - Id: !Ref Ec2Instance
+      TargetType: instance
+      VpcId: !Ref VPC
+  RestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: !Sub '${AWS::StackName}-apigw'
+      Name: !Sub '${AWS::StackName}-apigw'
+  RestAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref RestAPI
+      Description: Automatically created by the RestApi construct
+    DependsOn:
+      - RestAPIproxyGET
+      - RestAPIproxy
+  RestAPIDeploymentStageprod:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestAPI
+      DeploymentId: !Ref RestAPIDeployment
+      StageName: prod
+  RestAPIproxy:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt RestAPI.RootResourceId
+      PathPart: "{proxy+}"
+      RestApiId: !Ref RestAPI
+  RestAPIproxyGET:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId: !Ref RestAPIproxy
+      RestApiId: !Ref RestAPI
+      AuthorizationType: NONE
+      Integration:
+        ConnectionId: !Ref VpcLink
+        ConnectionType: VPC_LINK
+        IntegrationHttpMethod: GET
+        Type: HTTP_PROXY
+        Uri: !Sub
+          - 'http://${dnsname}'
+          - {
+              dnsname: !GetAtt NetworkLoadBalancer.DNSName
+            }
+  VpcLink:
+    Type: AWS::ApiGateway::VpcLink
+    Properties:
+      Name: !Sub '${AWS::StackName}-vpclink'
+      TargetArns:
+        - !Ref NetworkLoadBalancer
+
+Outputs:
+  RestAPIEndpoint:
+    Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${RestAPIDeploymentStageprod}/index.html'

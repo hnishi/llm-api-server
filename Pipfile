@@ -1,0 +1,25 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+langchain = "*"
+openai = "*"
+tiktoken = "*"
+python-jose = "*"
+python-dotenv = "*"
+
+[dev-packages]
+mypy = "*"
+types-python-jose = "*"
+black = "*"
+isort = "*"
+
+[requires]
+python_version = "3.10"
+
+[scripts]
+start = "python main.py"
