@@ -1,5 +1,11 @@
 # llm-api-server
 
+## Install packages
+
+```shell
+pipenv install
+```
+
 ## Run the app
 
 ```shell
