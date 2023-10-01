@@ -18,9 +18,11 @@ async def question(
     try:
         temperature = None
         question = req_body.text
-        answer = logic.generate_answer(question, temperature)
+        collection = req_body.collection
 
+        answer = logic.answer(question, collection, temperature)
         return QuestionResponse(text=answer)
+
     except HTTPException as e:
         raise e
     except Exception as e:

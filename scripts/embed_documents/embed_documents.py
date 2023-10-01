@@ -14,7 +14,7 @@ from qdrant_client import QdrantClient
 def embed_document(document_path: str, qdrant_path: str, collection_name: str):
     embeddings = OpenAIEmbeddings()
 
-    create_documents = False
+    create_documents = True
     qdrant = None
 
     if create_documents:
@@ -73,12 +73,6 @@ def parse_args():
         help="file path for qdrant on-disk storage",
         type=str,
         default="./local_qdrant",
-    )
-    parser.add_argument(
-        "--recursive",
-        help="recursively search for files in the document-path directory",
-        type=bool,
-        default=False,
     )
     parser.add_argument(
         "--collection-name",
