@@ -10,4 +10,8 @@
     "--profile",
     "black"
   ],
+  "flake8.args": [
+    "--ignore",
+    "E501"
+  ]
 }

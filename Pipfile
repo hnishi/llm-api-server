@@ -11,6 +11,8 @@ openai = "*"
 tiktoken = "*"
 python-jose = "*"
 python-dotenv = "*"
+qdrant-client = "*"
+unstructured = {extras = ["md"], version = "*"}
 
 [dev-packages]
 mypy = "*"
